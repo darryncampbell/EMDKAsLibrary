@@ -5,6 +5,8 @@ package com.zebra.emdkaar;
  */
 
 import android.content.Context;
+import android.util.Log;
+
 import com.symbol.emdk.EMDKManager;
 import com.symbol.emdk.EMDKResults;
 import com.symbol.emdk.EMDKManager.EMDKListener;
@@ -29,7 +31,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class EMDKWrapper
+public class EMDKWrapper extends GenericScanningLibrary
 {
     //  How to send callbacks to the main application
     private IEMDKWrapperCommunication mainApp;
@@ -42,7 +44,7 @@ public class EMDKWrapper
     public EMDKWrapper(IEMDKWrapperCommunication mainApplication, Context c)
     {
         this.mainApp = mainApplication;
-        emdk = new EMDKImplementationWrapper(c);
+            emdk = new EMDKImplementationWrapper(c);
     }
 
     //  These methods effectively represent an example interface from the AAR to control the scanner
@@ -95,7 +97,7 @@ public class EMDKWrapper
     }
 
     public void setDecoders() {
-        emdk.setDecoders();
+        emdk.setDecodersRequested();
     }
 
     //  Need to wrap the EMDK logic in a private class as EMDKListener requires a public @Override
@@ -110,6 +112,8 @@ public class EMDKWrapper
         private int triggerIndex = 0;
         private boolean bContinuousMode = false;
         private String statusString = "";
+        boolean setDecodersRequested = false;
+        private static final String LOG_TAG = "EMDK Impl Wrapper";
 
         private EMDKImplementationWrapper(Context c)
         {
@@ -176,9 +180,9 @@ public class EMDKWrapper
                 switch(connectionState) {
                     case CONNECTED:
                         deInitScanner();
+                        setDecodersRequested();
                         initScanner();
                         setTrigger();
-                        setDecoders();
                         break;
                     case DISCONNECTED:
                         deInitScanner();
@@ -216,12 +220,21 @@ public class EMDKWrapper
                 case IDLE:
                     statusString = statusData.getFriendlyName()+" is enabled and idle...";
                     mainApp.setStatus(statusString);
+                    if (!scanner.isReadPending())
+                    {
+                        if (setDecodersRequested)
+                        {
+                            //  Note: Decoders should only be set once the scanner is enabled.
+                            setDecoders();
+                            setDecodersRequested = false;
+                        }
+                    }
                     if (bContinuousMode) {
                         try {
                             // An attempt to use the scanner continuously and rapidly (with a delay < 100 ms between scans)
                             // may cause the scanner to pause momentarily before resuming the scanning.
                             // Hence add some delay (>= 100ms) before submitting the next read.
-                            //  :/
+                            //  :/  Based on BarcodeSample1
                             try {
                                 Thread.sleep(100);
                             } catch (InterruptedException e) {
@@ -270,9 +283,30 @@ public class EMDKWrapper
             if ((scannerIndex != position) || (scanner==null)) {
                 scannerIndex = position;
                 deInitScanner();
+                setDecodersRequested();
                 initScanner();
                 setTrigger();
-                setDecoders();
+            }
+        }
+
+        private void setDecodersRequested() {
+            if ((scanner != null) && (scanner.isEnabled())) {
+                if (scanner.isReadPending()) {
+                    try {
+                        setDecodersRequested = true;
+                        scanner.cancelRead();
+                    } catch (ScannerException e) {
+                        mainApp.setStatus(e.getMessage());
+                    }
+                }
+                else
+                {
+                    setDecoders();
+                }
+            }
+            else
+            {
+                setDecodersRequested = true;
             }
         }
 
@@ -338,7 +372,7 @@ public class EMDKWrapper
         private void startScan(boolean isContinuous) {
 
             if(scanner == null) {
-                initScanner();
+                Log.e(LOG_TAG, "Scanner object is null");
             }
 
             if (scanner != null) {
@@ -373,7 +407,7 @@ public class EMDKWrapper
         private void setDecoders() {
 
             if (scanner == null) {
-                initScanner();
+                Log.e(LOG_TAG, "Scanner object is null");
             }
 
             if ((scanner != null) && (scanner.isEnabled())) {
@@ -541,9 +575,9 @@ public class EMDKWrapper
                 mainApp.setDefaultSpinner(scannerIndex);
 
                 // Initialize scanner
+                setDecodersRequested();
                 initScanner();
                 setTrigger();
-                setDecoders();
             }
         }
     }

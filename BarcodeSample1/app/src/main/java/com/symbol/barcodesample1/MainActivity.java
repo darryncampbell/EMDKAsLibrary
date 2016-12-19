@@ -28,8 +28,10 @@ import android.widget.TextView;
 import android.widget.AdapterView.OnItemSelectedListener;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
+import android.widget.Toast;
 
 import com.zebra.emdkaar.EMDKWrapper;
+import com.zebra.emdkaar.GenericScanningLibrary;
 import com.zebra.emdkaar.IEMDKWrapperCommunication;
 
 
@@ -46,15 +48,24 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
     private Spinner spinnerTriggers = null;
     private int dataLength = 0;
     private String [] triggerStrings = {"HARD", "SOFT"};
-    private EMDKWrapper scannerObj = null;
+    private GenericScanningLibrary scannerObj = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         //  Create an instance of the abstracted scanner object exposed from the aar
-        scannerObj = new EMDKWrapper(this, getApplicationContext());
-
+        //  per http://techdocs.zebra.com/emdk-for-android/6-0/guide/programming_practices/#emdkconcurrencyguidelines
+        if(android.os.Build.MANUFACTURER.contains("Zebra Technologies") ||
+                android.os.Build.MANUFACTURER.contains("Motorola Solutions") ) {
+            scannerObj = new EMDKWrapper(this, getApplicationContext());
+        }
+        else
+        {
+            //  Instantiate an alternative scanning library for non-Zebra devices
+            Toast.makeText(getApplicationContext(), "Scanner Logic unsupported on this device", Toast.LENGTH_LONG).show();
+            setStatus("Scanner Logic unsupported on this device");
+        }
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_NOSENSOR);
         setDefaultOrientation();
 
@@ -120,22 +131,24 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        //  Just blindly send messages through to the scanner object in this sample
-        scannerObj.onDestroy();
+        if (scannerObj != null)
+            scannerObj.onDestroy();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         // The application is in background
-        scannerObj.onPause();
+        if (scannerObj != null)
+            scannerObj.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         // The application is in foreground
-        scannerObj.onResume();
+        if (scannerObj != null)
+            scannerObj.onResume();
     }
 
     @Override
@@ -165,7 +178,8 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
             public void onItemSelected(AdapterView<?> parent, View arg1,
                                        int position, long arg3) {
 
-                scannerObj.selectedDeviceChanged(position);
+                if (scannerObj != null)
+                    scannerObj.selectedDeviceChanged(position);
             }
 
             @Override
@@ -183,8 +197,8 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
             @Override
             public void onItemSelected(AdapterView<?> arg0, View arg1,
                                        int position, long arg3) {
-
-                scannerObj.selectedTriggerChanged(position);
+                if (scannerObj != null)
+                    scannerObj.selectedTriggerChanged(position);
             }
 
             @Override
@@ -203,7 +217,8 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
             @Override
             public void onClick(View arg0) {
 
-                scannerObj.startScan(checkBoxContinuous.isChecked());
+                if (scannerObj != null)
+                    scannerObj.startScan(checkBoxContinuous.isChecked());
             }
         });
     }
@@ -217,7 +232,8 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
             @Override
             public void onClick(View v) {
 
-                scannerObj.stopScan();
+                if (scannerObj != null)
+                    scannerObj.stopScan();
             }
         });
     }
@@ -229,10 +245,12 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked) {
-                    scannerObj.setContinuousMode(true);
+                    if (scannerObj != null)
+                        scannerObj.setContinuousMode(true);
                 }
                 else {
-                    scannerObj.setContinuousMode(false);
+                    if (scannerObj != null)
+                        scannerObj.setContinuousMode(false);
                 }
             }
         });
@@ -250,6 +268,8 @@ public class MainActivity extends Activity implements OnCheckedChangeListener, I
 
     @Override
     public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+        if (scannerObj == null)
+            return;
         scannerObj.setEAN8Decoder(checkBoxEAN8.isChecked());
         scannerObj.setEAN13Decoder(checkBoxEAN13.isChecked());
         scannerObj.setCode39Decoder(checkBoxCode39.isChecked());
